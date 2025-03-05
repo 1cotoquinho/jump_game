@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pule os lazers</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            overflow: hidden;
+        }
+
+        canvas {
+            background-color: #ffffff;
+            border: 1px solid black;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            font-size: 30px;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        .button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 20px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+
+<body>
+
+    <audio id="backgroundMusic" loop>
+        <source src="audios\Undertale OST - 080 Finale.mp3" type="audio/mp3">
+    </audio>
+    <audio id="jumpSound">
+        <source src="audios\salto-mario-faw.mp3" type="audio/mp3">
+    </audio>
+    <audio id="gameOverSound">
+        <source src="audios\bob-esponja-fail-sound.mp3" type="audio/mp3">
+    </audio>
+    <audio id="explosionSound">
+        <source src="audios\shocked-sound-effect.mp3" type="audio/mp3">
+    </audio>
+    <audio id="victorySound">
+        <source src="audios\victory-mario-series-hq-super-smash-bros.mp3" type="audio/mp3">
+    </audio>
+
+    <canvas id="gameCanvas" width="1500" height="700"></canvas>
+
+    <!-- Tela inicial -->
+    <div id="startScreen" class="overlay">
+        <div>
+            <h1>Bem vindo(a) ao jogo sobre pular os lazers, pule os lazers e tente chegar ao final(não será fácil 😈😈😈)</h1>
+            <button class="button" onclick="startGame()">Começar Jogo</button>
+        </div>
+    </div>
+
+    <!-- Tela de Game Over -->
+    <div id="gameOverScreen" class="overlay" style="display: none;">
+        <div>
+            <h1> Você perdeu, não perca a esperança tenha DETERMINAÇÃO</h1>
+            <button class="button" onclick="startGame()">Jogar Novamente</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let x = 50; // Posição inicial do personagem
+        let y = 310; // Ajustado para ficar encostado no chão
+        const width = 30;
+        const height = 30;
+        let jump = false;
+        let angle = 0; // Ângulo de rotação
+        let faceDirection = 1; // Controla qual lado está virado (1=topo, 2=direita, 3=baixo, 4=esquerda)
+        let gameRunning = false;
+        let obstacles = []; // Lista de obstáculos
+        let score = 0; // Pontuação
+        let rotationInProgress = false; // Controla se a rotação está em andamento
+
+        // Carregar os sons
+        const backgroundMusic = document.getElementById('backgroundMusic');
+        const jumpSound = document.getElementById('jumpSound');
+        const gameOverSound = document.getElementById('gameOverSound');
+        const explosionSound = document.getElementById('explosionSound');
+        const victorySound = document.getElementById('victorySound');
+
+        // Função para iniciar o jogo
+        function startGame() {
+            gameRunning = true;
+            x = 50;
+            y = 310; // Quadrado fica no chão
+            angle = 0;
+            faceDirection = 1; // Começa com o lado 1 virado para cima
+            obstacles = []; // Reseta os obstáculos
+            score = 0; // Reseta a pontuação
+            spawnObstacle();
+            gameOverSound.pause();
+            backgroundMusic.play();
+            document.getElementById('startScreen').style.display = 'none'; // Esconde a tela inicial
+            document.getElementById('gameOverScreen').style.display = 'none'; // Esconde a tela de game over
+            draw();
+        }
+
+        // Função de Game Over
+        function gameOver() {
+            gameRunning = false;
+            gameOverSound.play(); // Toca o som de game over
+            backgroundMusic.pause(); // Para a música de fundo
+            document.getElementById('gameOverScreen').style.display = 'flex'; // Exibe a tela de game over
+        }
+
+        // Função para gerar obstáculos
+        function spawnObstacle() {
+            const obstacleHeight = Math.floor(Math.random() * 50) + 20; // Tamanho dos obstáculos entre 20 e 70
+            let obstacle = {
+                x: canvas.width,
+                y: 340 - obstacleHeight, // Faz o obstáculo aparecer em diferentes alturas
+                width: 30,
+                height: obstacleHeight,
+            };
+            obstacles.push(obstacle);
+        }
+
+        // Função para desenhar os obstáculos
+        function drawObstacles() {
+            ctx.fillStyle = 'red';
+            obstacles.forEach(obstacle => {
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                obstacle.x -= 6; // O obstáculo se move da direita para a esquerda
+            });
+        }
+
+
+        // Função para verificar colisão com obstáculos
+        function checkObstacleCollision() {
+            if (score >= 125) {
+                return; // Ignora a colisão se o jogador tiver 125 pontos ou mais
+            }
+
+            for (let i = 0; i < obstacles.length; i++) {
+                let obstacle = obstacles[i];
+                if (x + width > obstacle.x && x < obstacle.x + obstacle.width && y + height > obstacle.y) {
+                    explosionSound.play();
+                    gameOver(); // Se colidir com o obstáculo e não for protegido, game over
+                }
+            }
+        }
+
+        let victorySoundPlayed = false;
+        // Função para desenhar o quadrado e outros elementos
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Desenha o chão
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, 340, canvas.width, 50); // O chão é desenhado na posição 350
+
+            // Desenha os obstáculos
+            drawObstacles();
+
+            // Desenha o quadrado com a rotação
+            ctx.save(); // Salva o estado atual do canvas
+            ctx.translate(x + width / 2, y + height / 2); // Move a origem para o centro do quadrado
+            ctx.rotate(angle * Math.PI / 180); // Rotaciona o quadrado
+
+            // Desenha o quadrado
+            ctx.fillStyle = 'skyblue';
+            ctx.fillRect(-width / 2, -height / 2, width, height);
+
+            // Desenha a carinha ":3" de acordo com a rotação
+            ctx.font = '20px Arial';
+            ctx.fillStyle = 'black';
+
+            // A posição da carinha muda conforme o lado
+            switch (faceDirection) {
+                case 1: // Topo
+                    ctx.fillText(':3', -width / 4, -height / 4);
+                    break;
+                case 2: // Direita
+                    ctx.fillText(':3', width / 4, -height / 4);
+                    break;
+                case 3: // Baixo
+                    ctx.fillText(':3', width / 4, height / 4);
+                    break;
+                case 4: // Esquerda
+                    ctx.fillText(':3', -width / 4, height / 4);
+                    break;
+            }
+
+            ctx.restore(); // Restaura o estado do canvas
+
+            // Animação do pulo e gravidade
+            if (jump) {
+                if (!rotationInProgress) { // Se a rotação ainda não foi completada, inicia a rotação
+                    rotationInProgress = true;
+                    setTimeout(() => {
+                        faceDirection = (faceDirection == 1) + 1; // Muda a direção da face a cada rotação
+                        setTimeout(() => {
+                            rotationInProgress = false;
+                        }, 100); // Pequeno delay para completar a rotação
+                    }, 100);
+                }
+
+                y -= 5; // Pulo
+                angle += 10; // Aumenta a rotação suavemente
+                if (angle >= 90) {
+                    angle = 90; // Limita a rotação a 90 graus por pulo
+                }
+                if (y <= 200) {
+                    jump = false;
+                }
+            } else {
+                if (y < 310) { // Ajusta a queda para o quadrado não ultrapassar o chão
+                    y += 5; // Gravidade
+                }
+            }
+
+            // Verificar colisão com os obstáculos
+            checkObstacleCollision();
+
+            // Gerar obstáculos novos a cada 2000ms
+            // Parar de gerar obstáculos ao atingir 130 pontos
+            if (score < 125) {
+                if (gameRunning && obstacles[obstacles.length - 1].x < canvas.width - 300) {
+                    spawnObstacle();
+                }
+            } else {
+                // Exibir mensagem de vitória
+                ctx.fillStyle = 'black';
+                ctx.font = '30px Arial';
+                ctx.fillText('PARABENS VOCÊ CHEGOU AO FINAL!🎉🎉🥳🥳', canvas.width / 2 - 100, canvas.height / 2 - 30);
+
+                // Parar a música de fundo e tocar som de vitória
+                backgroundMusic.pause();
+                if (!victorySoundPlayed) {
+                    victorySound.play();
+                    victorySoundPlayed = true;
+
+                }
+            }
+            // Desenhar a aura azul ao redor do personagem
+            if (score >= 125) {
+                ctx.beginPath();
+                ctx.arc(x + width / 2, y + height / 2, 50, 0, Math.PI * 2); // Desenha um círculo ao redor do personagem
+                ctx.lineWidth = 5;
+                ctx.strokeStyle = 'blue'; // Cor da aura
+                ctx.stroke();
+                ctx.closePath();
+
+                // Exibir a palavra "PROTEGIDO" acima do personagem
+                ctx.fillStyle = 'blue';
+                ctx.font = '20px Arial';
+                ctx.fillText('PROTEGIDO', x + width / 3 - 40, y - 60); // Centraliza a palavra acima do personagem
+            }
+
+
+            // Atualizar a pontuação
+            obstacles.forEach(obstacle => {
+                if (obstacle.x + obstacle.width < 0) {
+                    score += 1; // Incrementa a pontuação ao passar pelo obstáculo
+                    obstacles.shift(); // Remove o obstáculo
+                }
+            });
+
+
+            // Exibir a pontuação
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Pontuação: ${score}`, 20, 30);
+
+            if (gameRunning) {
+                requestAnimationFrame(draw);
+            }
+        }
+
+
+        // Função para fazer o personagem pular
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && y === 310 && gameRunning) { // Pulo só ocorre se estiver no chão
+                jump = true;
+                angle = 0; // Reseta a rotação quando começa um novo pulo
+                jumpSound.play(); // Toca o som de pulo
+            }
+        });
+
+        // Começar o jogo quando carregar a página
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('startScreen').style.display = 'flex'; // Exibe a tela inicial
+        });
+    </script>
+</body>
+</html>
